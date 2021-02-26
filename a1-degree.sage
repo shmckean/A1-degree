@@ -7,6 +7,8 @@
 # s = polygen(QQ,'s');
 # k.<sqrt2> = NumberField(s^2-2);
 
+# For univariate polynomials, set n = 2 and use x[1] as a dummy function: f = (f(x[0]),x[1]).
+
 
 
 
