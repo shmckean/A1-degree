@@ -1,5 +1,5 @@
 # Implementation of Bezoutian formula for local and global A^1-degrees.
-# Currently does not work with R or C, but these can be approximated by number fields.
+# Currently does not work with R or C, but these can be approximated by the algebraic reals k = AA and algebraic numbers k = QQbar, respectively.
 # Written by Thomas Brazelton, Stephen McKean, and Sabrina Pauli.
 
 # Example set-up for number fields. 
@@ -58,7 +58,6 @@ F = []; # (note: computes ideals in k[x] and k[X,Y])
 for i in range(n):
     F.append(g[i](X));
     F.append(g[i](Y));
-I = g*R;
 J = F*Rxy;
 
 Q = Rxy.quo(J); # (note: computes basis via Bezoutian)
