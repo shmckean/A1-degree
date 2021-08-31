@@ -1,16 +1,16 @@
 # Implementation of Bezoutian formula for local and global A^1-degrees.
 # Currently does not work with R or C, but these can be approximated by the algebraic reals k = AA and algebraic numbers k = QQbar, respectively.
 # Written by Thomas Brazelton, Stephen McKean, and Sabrina Pauli.
+# We thank Irena Swanson for suggesting a fix to the local calculation, as well as Kyle Ormsby for communicating this suggestion to us.
 
-# Example set-up for number fields. 
+# Example set-up for number fields.
 # The following 2 lines should replace "k = QQ; # INPUT:..."
 # s = polygen(QQ,'s');
 # k.<sqrt2> = NumberField(s^2-2);
 
 # For univariate polynomials, set n = 2 and use x[1] as a dummy function: f = (f(x[0]),x[1]).
 
-
-
+####################
 
 k = QQ; # INPUT: choose field
 n = 2;  # INPUT: choose number of variables and polynomials
@@ -20,9 +20,14 @@ x = R.gens();
 
 f = ((x[0]-1)*x[0]*x[1],2*x[0]^2-3*x[1]^2); # INPUT: choose morphism; variables indexed from 0 to n-1
 p = (x[0]-1,2-3*x[1]^2); # INPUT: choose local point; set p = (1) for global computation
-diagonal = True; # INPUT: True prints out diagonal form (does not work in characteristic 2)
+
+# INPUT: decide how you would like the A^1-degree to be presented:
+gram = False; # INPUT: True prints out Gram matrix of A^1-degree
+diagonal = False; # INPUT: True prints out A^1-degree as diagonal quadratic form (does not work in characteristic 2)
+reduce_over_Q = True; # INPUT: True prints out A^1-degree in hyperbolic and non-hyperbolic parts (reduced over QQ)
 details = False; # INPUT: True prints out invariants of bilinear form
-reduce_over_Q = False; # INPUT: True prints out reduction of the form over the rationals into hyperbolic and non-hyperbolic parts
+
+####################
 
 # Turn a diagonal matrix into a list of its diagonal entries
 def diagonal_matrix_to_list(M):
@@ -38,7 +43,7 @@ def strip_squares_integer(n):
     for pair in factorization:
         newpower = pair[1] % 2
         reduced_factorization.append([pair[0],newpower])
-    
+
     m = factor(n).unit()
     for pair in reduced_factorization:
         m = m*(pair[0]**pair[1])
@@ -51,7 +56,6 @@ def strip_squares_rational(q):
     n = a*b
     return strip_squares_integer(n)
 
-
 # Match elements with their negatives into hyperbolic forms
 def hyp_list(list_of_diagonal_entries):
     how_many_hyperbolics = 0
@@ -61,15 +65,22 @@ def hyp_list(list_of_diagonal_entries):
         y = -x
         if y in list_of_diagonal_entries:
             how_many_hyperbolics = how_many_hyperbolics + 1
-            
+
             # Remove y from list
             del list_of_diagonal_entries[list_of_diagonal_entries.index(y)]
         else:
             leftover_stuff.append(x)
         # Remove x from list
         del list_of_diagonal_entries[0]
-    
-    return('Rational reduction: ' +str(how_many_hyperbolics) + 'H + ' + str(leftover_stuff))
+
+    if how_many_hyperbolics > 0 and len(leftover_stuff) > 0:
+        return('Rational reduction: ' +str(how_many_hyperbolics) + 'H + < ' + ', '.join(map(str,leftover_stuff)) + ' >')
+    elif how_many_hyperbolics == 0 and len(leftover_stuff) > 0:
+        return('Rational reduction: < ' + ', '.join(map(str,leftover_stuff)) + ' >')
+    elif how_many_hyperbolics > 0 and len(leftover_stuff) == 0:
+        return('Rational reduction: ' +str(how_many_hyperbolics) + 'H')
+    else:
+        return('0')
 
 # Take a diagonal matrix over Q and output its hyperbolic parts
 def reduce_matrix(M):
@@ -80,29 +91,19 @@ def reduce_matrix(M):
         reduced_list_of_entries.append(w)
     return(hyp_list(reduced_list_of_entries))
 
-
-
-
-
-if k.characteristic() == 2: # (note: cannot diagonalize quadratic form in characteristic 2)
+# Cannot diagonalize quadratic form in characteristic 2
+if diagonal and k.characteristic() == 2:
     diagonal = False;
     print('cannot diagonalize in characteristic 2')
 
-g = []; # (note: reduces f for quotient and basis in local case)
-for i in range(n):
-    H = [];
-    for h in f[i].factor():
-        if h[0]^h[1] in R.ideal(p):
-            H.append(h[0]^h[1]);
-    g.append(prod(H));
-
-Rxy = PolynomialRing(k,n,var_array=['X','Y']); # (note: computes Bezoutian)
+# Computes Bezoutian polynomial
+Rxy = PolynomialRing(k,n,var_array=['X','Y']);
 L = Rxy.gens();
 X = [L[2*i] for i in range(n)];
 Y = [L[2*i+1] for i in range(n)];
 W = X.copy();
 Z = [X];
-for i in range(n):
+for i in range(n): # Z[i] = [Y[0],...,Y[i-1],X[i],...,X[n-1]]
     W = W.copy();
     W[i] = Y[i];
     Z.append(W);
@@ -112,13 +113,22 @@ for i in range(n):
         D.append((f[i](Z[j])-f[i](Z[j+1]))/(X[j]-Y[j]));
 Bez = matrix(Rxy,n,D).det();
 
-F = []; # (note: computes ideals in k[x] and k[X,Y])
+# Computes ideal to quotient by in k[X,Y]
+I = R.ideal(f);
+Sat = I.saturation(R.ideal(p))[0];
+if R.ideal(p).is_trivial(): # Ideal needs no modification for global A^1-degree
+    g = f;
+else: # Use saturation to identify extra relations coming from localization
+    J = I.quotient(Sat);
+    g = J.gens();
+F = [];
 for i in range(n):
     F.append(g[i](X));
     F.append(g[i](Y));
 J = F*Rxy;
 
-Q = Rxy.quo(J); # (note: computes basis via Bezoutian)
+# Computes quotient of Bezoutian and basis of quotient ring
+Q = Rxy.quo(J);
 Bez = Q(Bez).lift();
 U = [];
 Ux = [];
@@ -138,28 +148,41 @@ for u in Bez.monomials():
         a.append(u(U));
         ax.append(u(Ux));
         ay.append(u(Uy));
-m = len(a);
 
+# Computes Bezoutian bilinear form
+m = len(a);
 B = [];
 for i in range(m):
     for j in range(m):
-        if not (ax[i]*ay[j]).is_constant(): # (note: runs through non-constant monomial basis elements)
+        if not (ax[i]*ay[j]).is_constant(): # runs through non-constant monomial basis elements
             B.append(Bez.monomial_coefficient(ax[i]*ay[j]));
-        else:
+        else: # picks up constant monomial basis element, scales to equal 1 (one could also just append 1)
             B.append(Bez.constant_coefficient()/(ax[i]*ay[j]));
 M = matrix(k,m,B);
-if R.ideal(p).is_trivial():
-    print('Global A^1-degree of',f)
-else:
-    print('Local A^1-degree of',f,'at',p)
 
-if diagonal: # (note: prints diagonal form)
-    print(QuadraticForm(M).rational_diagonal_form())
+# Print whether degree is local or global
+if R.ideal(p).is_trivial():
+    print('Global A^1-degree of',f,':')
 else:
+    print('Local A^1-degree of',f,'at',p,':')
+
+# Print A^1-degree as Gram matrix
+if gram:
     print(M)
     print('element of GW(',k,')')
 
-if details: # (note: prints relevant invariants)
+# Print A^1-degree as diagonal quadratic form
+if diagonal:
+    print(QuadraticForm(M).rational_diagonal_form())
+
+# Print A^1-degree in terms of hyperbolic forms and standard generators
+if reduce_over_Q:
+	QMat = QuadraticForm(M).rational_diagonal_form()
+	MMat = QMat.Gram_matrix()
+	print(reduce_matrix(MMat))
+
+# Print field invariants of bilinear form
+if details:
     print('rank',m)
     if k.characteristic() > 0:
         if M.determinant().is_square():
@@ -168,15 +191,10 @@ if details: # (note: prints relevant invariants)
             print('disc','-1')
     if k.characteristic() == 0:
         print('sign',QuadraticForm(M).signature())
-    if k == QQ: # (note: prints Hasse-Witt invariants for k = QQ)
+
+    # Over QQ, print non-trivial Hasse-Witt invariants for first 1000 primes
+    if k == QQ:
         print('prime:','Hasse-Witt invariant:')
-        print('infty',QuadraticForm(M).hasse_invariant(-1)) # (note: prints Hasse-Witt invariant at infinite place)
-        for q in primes_first_n(1000): # (note: prints non-trivial Hasse-Witt invariants for first 1000 primes)
+        for q in primes_first_n(1000):
             if not QuadraticForm(M).hasse_invariant(q) == 1:
                 print(q,QuadraticForm(M).hasse_invariant(q))
-
-if reduce_over_Q:
-	QMat = QuadraticForm(M).rational_diagonal_form()
-	MMat = QMat.Gram_matrix()
-	print(reduce_matrix(MMat))
-
