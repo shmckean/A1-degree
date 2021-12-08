@@ -173,11 +173,11 @@ if gram:
 
 # Print A^1-degree as diagonal quadratic form
 if diagonal:
-    print(QuadraticForm(M).rational_diagonal_form())
+    print(2*QuadraticForm(M).rational_diagonal_form())
 
 # Print A^1-degree in terms of hyperbolic forms and standard generators
 if reduce_over_Q:
-	QMat = QuadraticForm(M).rational_diagonal_form()
+	QMat = 2*QuadraticForm(M).rational_diagonal_form()
 	MMat = QMat.Gram_matrix()
 	print(reduce_matrix(MMat))
 
